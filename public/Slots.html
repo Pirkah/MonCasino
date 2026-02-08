@@ -5,76 +5,57 @@
     <title>Neon Slots</title>
     <style>
         body{background:#11001c;color:white;text-align:center;font-family:Arial,sans-serif;overflow:hidden;user-select:none;}
-        .slot-machine{background:#222;border:10px solid #444;border-radius:20px;width:600px;margin:30px auto;padding:30px;box-shadow:0 0 50px #d63384;position:relative;}
+        .slot-machine{background:#222;border:10px solid #444;border-radius:20px;width:600px;margin:30px auto;padding:30px;box-shadow:0 0 50px #d63384;}
         .reels{display:flex;justify-content:space-around;background:black;border:5px solid gold;border-radius:10px;padding:10px;height:200px;overflow:hidden;}
         .reel{font-size:80px;width:30%;height:100%;display:flex;justify-content:center;align-items:center;background:#111;border:1px solid #333;}
-        .blur{filter:blur(4px);color:transparent;text-shadow:0 0 0 transparent;}
+        .blur{filter:blur(4px);color:transparent;}
         .controls{margin-top:30px;display:flex;justify-content:center;gap:20px;align-items:center;}
-        .mise{background:#333;color:white;border:2px solid #d63384;padding:10px 20px;border-radius:10px;cursor:pointer;font-weight:bold;}
+        .mise{background:#333;color:white;border:2px solid #d63384;padding:10px 20px;border-radius:10px;cursor:pointer;}
         .sel{background:#d63384;transform:scale(1.1);}
-        #spin{background:gold;color:black;width:100px;height:100px;border-radius:50%;font-size:24px;font-weight:bold;cursor:pointer;border:4px solid #b8860b;}
-        #msg{font-size:40px;font-weight:bold;color:gold;margin-top:20px;min-height:50px;}
-        .payout-table { margin-top: 20px; font-size: 14px; color: #aaa; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 10px; border: 1px solid #444; display: inline-block; }
-        .payout-item { display: inline-block; margin: 0 10px; }
-        #ecran-pseudo{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:100;display:flex;flex-direction:column;justify-content:center;align-items:center;}
-        input{padding:15px;font-size:20px;}
-        .solde-container { font-size:24px;color:#d63384;font-weight:bold;padding:20px;position:relative;display:inline-block; }
-        .float-money { position: absolute; font-weight: bold; font-size: 24px; animation: floatUp 1.5s ease-out forwards; z-index: 1000; pointer-events: none; left:50%; }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-50px) scale(1.2); } }
-        #chat-wrapper { position: fixed; bottom: 10px; left: 10px; z-index: 1000; text-align: left; }
-        #chat-icon { width: 50px; height: 50px; background: gold; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 0 10px gold; font-size: 24px; color: black; }
-        #chat-box { width: 300px; height: 250px; background: rgba(0,0,0,0.9); border: 2px solid gold; border-radius: 10px; display: none; flex-direction: column; padding: 10px; }
-        #chat-log { flex: 1; overflow-y: auto; color: #ddd; font-size: 12px; margin-bottom: 5px; font-family: monospace; }
-        #chat-input { padding: 5px; border-radius: 5px; border: none; }
+        #spin{background:gold;color:black;width:100px;height:100px;border-radius:50%;font-size:24px;font-weight:bold;cursor:pointer;}
+        #solde-display{font-size:24px;color:#d63384;font-weight:bold;margin:20px;}
     </style>
 </head>
 <body>
-    <div id="ecran-pseudo"><h1>Slots</h1><input type="text" id="input-pseudo" placeholder="Pseudo"><br><button class="mise" onclick="go()">ENTRER</button></div>
-    <div style="width:100%; text-align:center;">
-        <a href="/" style="text-decoration:none;color:#d63384;font-weight:bold;font-size:20px;float:left;margin:20px;">🏠 Accueil</a>
-        <div class="solde-container">Solde: <span id="solde">0</span> $<div id="anim-anchor"></div></div>
-    </div>
-    <div id="chat-wrapper"><div id="chat-box"><div id="chat-log"></div><input type="text" id="chat-input" placeholder="Message..." onkeypress="sendChat(event)"></div><div id="chat-icon" onclick="toggleChat()">💬</div></div>
+    <a href="/" style="color:white; float:left; margin:20px;">🏠 Accueil</a>
+    <div id="solde-display">💰 Solde : <span id="solde">0</span> $</div>
+    
     <div class="slot-machine">
         <div class="reels"><div class="reel" id="r1">🍒</div><div class="reel" id="r2">7️⃣</div><div class="reel" id="r3">💎</div></div>
-        <div id="msg"></div>
+        <div id="msg" style="font-size:30px; color:gold; margin:20px; height:40px;"></div>
         <div class="controls">
             <div class="mise sel" onclick="set(10,this)">10</div><div class="mise" onclick="set(50,this)">50</div><div class="mise" onclick="set(100,this)">100</div>
             <button id="spin" onclick="spin()">SPIN</button>
         </div>
-        <div class="payout-table"><span class="payout-item">3x 7️⃣ = <b>x50</b></span><span class="payout-item">3x 💎 = <b>x20</b></span><span class="payout-item">3x Fruits = <b>x5</b></span><span class="payout-item">2x Identiques = <b>x2</b></span></div>
     </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket=io(); let solde=localStorage.getItem('casino_solde')?parseInt(localStorage.getItem('casino_solde')):1000;
-        let pseudo=localStorage.getItem('casino_pseudo')||"";
-        document.getElementById('solde').innerText=solde; let m=10; let run=false;
-        
-        if(pseudo) { document.getElementById('input-pseudo').value = pseudo; socket.emit('nouveauJoueur', pseudo); document.getElementById('ecran-pseudo').style.display = 'none'; }
+        const socket=io();
+        let solde=0; let m=10; let run=false;
+        let pseudo=localStorage.getItem('casino_pseudo');
+        if(!pseudo) window.location.href="/";
 
-        function go(){let p=document.getElementById('input-pseudo').value; if(!p)return; localStorage.setItem('casino_pseudo',p); socket.emit('nouveauJoueur',p); document.getElementById('ecran-pseudo').style.display='none'; check();}
-        function check(){if(solde<=0){alert("Refill 500$");solde=500;upd();animSolde(500,true);}}
-        function upd(){localStorage.setItem('casino_solde',solde); document.getElementById('solde').innerText=solde;}
-        function set(v,e){if(run)return; m=v; document.querySelectorAll('.mise').forEach(b=>b.classList.remove('sel')); e.classList.add('sel');}
-        function animSolde(m, pos){ const el=document.createElement('div'); el.className='float-money'; el.innerText=(pos?'+':'')+m+'$'; el.style.color=pos?'#2ecc71':'red'; document.getElementById('anim-anchor').appendChild(el); setTimeout(()=>el.remove(),1500); }
+        socket.emit('nouveauJoueur', pseudo);
+        socket.on('initSolde', s => { solde = s; document.getElementById('solde').innerText = solde; });
+
+        function set(v,e){ if(run)return; m=v; document.querySelectorAll('.mise').forEach(b=>b.classList.remove('sel')); e.classList.add('sel');}
 
         function spin(){
-            if(run)return; if(m>solde)return alert('Pas assez');
-            run=true; solde-=m; upd(); animSolde(m,false); document.getElementById('msg').innerText="";
+            if(run || solde < m) return alert("Impossible de lancer");
+            run=true; document.getElementById('msg').innerText="";
             let iv=[null,null,null]; const sym=['🍒','🍋','🍇','💎','7️⃣'];
             [1,2,3].forEach((id,x)=>{
                 iv[x]=setInterval(()=>{ document.getElementById('r'+id).innerText=sym[Math.floor(Math.random()*sym.length)]; document.getElementById('r'+id).classList.add('blur'); },50+x*20);
             });
             socket.emit('slotsSpin',m);
-            socket.on('slotsResultat',d=>{ setTimeout(()=>stop(1,d.rouleaux[0],iv),1000); setTimeout(()=>stop(2,d.rouleaux[1],iv),2000); setTimeout(()=>{stop(3,d.rouleaux[2],iv); end(d);},3000); });
+            socket.on('slotsResultat',d=>{
+                setTimeout(()=>stop(1,d.rouleaux[0],iv),1000);
+                setTimeout(()=>stop(2,d.rouleaux[1],iv),2000);
+                setTimeout(()=>{stop(3,d.rouleaux[2],iv); run=false; if(d.gain>0) document.getElementById('msg').innerText=`+${d.gain}$ !`;},3000);
+            });
         }
         function stop(id,s,iv){ clearInterval(iv[id-1]); let e=document.getElementById('r'+id); e.innerText=s; e.classList.remove('blur'); }
-        function end(d){ run=false; if(d.gain>0){solde+=d.gain;upd();document.getElementById('msg').innerText=`+${d.gain}$ (${d.type})`;animSolde(d.gain,true);} else {document.getElementById('msg').innerText="PERDU";} check();}
-
-        function toggleChat(){ const b=document.getElementById('chat-box'); b.style.display=b.style.display==='flex'?'none':'flex'; }
-        function sendChat(e){ if(e.key==='Enter'){ let i=document.getElementById('chat-input'); if(i.value.trim()) socket.emit('chatMessage', i.value); i.value=''; } }
-        socket.on('chatNotification', m => { const l=document.getElementById('chat-log'); l.innerHTML+=`<div>${m}</div>`; l.scrollTop=l.scrollHeight; });
-        socket.on('forceUpdateSolde', m => { solde+=parseInt(m); upd(); alert(`Reçu ${m}$ !`); animSolde(m, true); });
     </script>
 </body>
 </html>

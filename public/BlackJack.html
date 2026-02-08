@@ -37,18 +37,14 @@
 </head>
 <body>
     <a href="/" style="position:absolute; top:10px; left:10px; color: gold; text-decoration:none; font-size:20px; font-weight:bold;">🏠 Accueil</a>
-    <button id="btn-sound" onclick="toggleSon()" style="position:absolute; top:10px; right:10px; background:none; border:2px solid white; color:white; padding:5px; border-radius:50%;">🔊</button>
-
-    <div id="chat-wrapper"><div id="chat-box"><div id="chat-log"></div><input type="text" id="chat-input" placeholder="Message ou /give..." onkeypress="sendChat(event)"></div><div id="chat-icon" onclick="toggleChat()">💬</div></div>
+    <div id="chat-wrapper"><div id="chat-box"><div id="chat-log"></div><input type="text" id="chat-input" placeholder="Message..." onkeypress="sendChat(event)"></div><div id="chat-icon" onclick="toggleChat()">💬</div></div>
 
     <div id="ecran-overlay">
-        <div id="etape-pseudo"><h1>Bienvenue</h1><input type="text" id="input-pseudo" placeholder="Ton Pseudo"><br><button class="btn-bet" onclick="validerPseudo()">ENTRER</button></div>
-        <div id="etape-mise" style="display:none;">
-            <h1>Salle d'Attente</h1><div id="liste-joueurs-lobby"></div>
-            <p>Solde : <span id="solde-mise">1000</span> $</p>
-            <div id="zone-input-mise"><input type="number" id="input-mise" value="100" min="10"><div><button class="btn-bet" onclick="validerMise()">💰 JE SUIS PRÊT</button></div></div>
-            <div id="msg-attente-lobby" style="display:none; color: yellow; margin-top: 20px;"><div class="loader">⏳</div><p>En attente des autres...</p></div>
-            <div id="msg-spectateur" style="display:none; color: #3498db; margin-top: 20px;"><div class="loader">👁️</div><p>Partie en cours...</p></div>
+        <div id="etape-mise">
+            <h1>Blackjack</h1><div id="liste-joueurs-lobby"></div>
+            <p>Solde : <span id="solde-mise">...</span> $</p>
+            <div id="zone-input-mise"><input type="number" id="input-mise" value="100" min="10"><div><button class="btn-bet" onclick="validerMise()">💰 PRÊT</button></div></div>
+            <div id="msg-attente-lobby" style="display:none; color: yellow; margin-top: 20px;"><div class="loader">⏳</div><p>En attente...</p></div>
         </div>
     </div>
 
@@ -56,11 +52,11 @@
         <h3>Adversaires</h3><div id="adversaires-container"></div>
         <div class="hud">
             <div>👤 <span id="mon-pseudo">Moi</span></div>
-            <div style="position:relative;">💰 <span id="portefeuille">1000</span> $ <div id="money-anim-anchor" style="position:absolute; top:0; left:50%;"></div></div>
+            <div style="position:relative;">💰 <span id="portefeuille">0</span> $ <div id="money-anim-anchor" style="position:absolute; top:0; left:50%;"></div></div>
         </div>
         <div class="tapis">
             <div class="zone-jeu"><h3>Croupier <span id="score-croupier">0</span></h3><div id="main-croupier"></div></div>
-            <div id="status-bar">En attente...</div>
+            <div id="status-bar">Synchronisation...</div>
             <div id="mes-mains-container"></div>
         </div>
         <div class="zone-actions">
@@ -73,64 +69,110 @@
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        let solde = localStorage.getItem('casino_solde') ? parseInt(localStorage.getItem('casino_solde')) : 1000;
+        let solde = 0;
         let pseudo = localStorage.getItem('casino_pseudo') || "";
-        let miseEnCours = 0; let cEstMonTour = false; let mesMains = []; let sonActif = true; let indexMainLocale = 0;
+        let miseEnCours = 0; let cEstMonTour = false; let mesMains = []; let indexMainLocale = 0;
 
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        function bip(f,d){if(!sonActif)return;if(audioCtx.state==='suspended')audioCtx.resume();let o=audioCtx.createOscillator();let g=audioCtx.createGain();o.frequency.value=f;o.connect(g);g.connect(audioCtx.destination);o.start();g.gain.exponentialRampToValueAtTime(0.00001,audioCtx.currentTime+d);o.stop(audioCtx.currentTime+d);}
-        function toggleSon(){sonActif=!sonActif; document.getElementById('btn-sound').innerText=sonActif?"🔊":"🔇";}
-        function animSolde(m, pos){ const el=document.createElement('div'); el.className='float-money'; el.innerText=(pos?'+':'')+m+'$'; el.style.color=pos?'#2ecc71':'#e74c3c'; document.getElementById('money-anim-anchor').appendChild(el); setTimeout(()=>el.remove(),1500); }
+        if(pseudo) {
+            document.getElementById('mon-pseudo').innerText = pseudo;
+            socket.emit('nouveauJoueur', pseudo);
+        } else {
+            window.location.href = "/";
+        }
 
-        if(pseudo) document.getElementById('input-pseudo').value = pseudo;
-        function validerPseudo(){pseudo=document.getElementById('input-pseudo').value;if(!pseudo)return;localStorage.setItem('casino_pseudo',pseudo);document.getElementById('mon-pseudo').innerText=pseudo;socket.emit('nouveauJoueur',pseudo);document.getElementById('etape-pseudo').style.display='none';document.getElementById('etape-mise').style.display='block';if(audioCtx.state==='suspended')audioCtx.resume();jouerSon('jetons');verifierFaillite();mettreAJourAffichage();}
-        function mettreAJourAffichage(){document.getElementById('portefeuille').innerText=solde;document.getElementById('solde-mise').innerText=solde;localStorage.setItem('casino_solde',solde);}
-        function verifierFaillite(){if(solde<=0){alert("⚠️ RUINÉ ! Cadeau : 500$");solde=500;mettreAJourAffichage();document.getElementById('input-mise').value=100;animSolde(500,true);}}
-        
+        socket.on('initSolde', s => {
+            solde = s;
+            document.getElementById('portefeuille').innerText = solde;
+            document.getElementById('solde-mise').innerText = solde;
+        });
+
         function validerMise(){
-            let v=parseInt(document.getElementById('input-mise').value); if(v>solde)return alert('Pas assez');
-            miseEnCours=v; solde-=v; mettreAJourAffichage(); animSolde(v, false);
-            document.getElementById('zone-input-mise').style.display='none'; document.getElementById('msg-attente-lobby').style.display='block'; socket.emit('joueurPret', miseEnCours);
+            let v = parseInt(document.getElementById('input-mise').value);
+            if(v > solde) return alert('Solde insuffisant !');
+            miseEnCours = v;
+            document.getElementById('zone-input-mise').style.display='none';
+            document.getElementById('msg-attente-lobby').style.display='block';
+            socket.emit('joueurPret', miseEnCours);
+        }
+
+        socket.on('miseAJourTable', d => {
+            const l = document.getElementById('liste-joueurs-lobby'); l.innerHTML="<b>Joueurs:</b>";
+            Object.values(d.joueurs).forEach(j => {
+                l.innerHTML += `<div>${j.pseudo} ${j.pret ? '(Prêt)' : '(...)'}</div>`;
+            });
+            const c = document.getElementById('adversaires-container'); c.innerHTML = "";
+            Object.values(d.joueurs).forEach(j => {
+                if(j.id !== socket.id && !j.spectateur && j.pret){
+                    let h = "";
+                    if(j.mains[0]) j.mains[0].cartes.forEach(k => h += `<div class="carte-small">${k.valeur}${k.symbole}</div>`);
+                    c.innerHTML += `<div class="adversaire ${d.idActif === j.id ? 'joueur-actif' : ''}"><div>${j.pseudo}</div><div>${h}</div></div>`;
+                }
+            });
+        });
+
+        socket.on('debutPartie', d => {
+            document.getElementById('ecran-overlay').style.display = 'none';
+            document.getElementById('mes-mains-container').innerHTML = "";
+            let moi = d.joueurs[socket.id];
+            if(moi) { mesMains = moi.mains; indexMainLocale = 0; afficherMesMains(); }
+            afficherCroupier(d.mainCroupier, false);
+            gererTour(d.idActif);
+        });
+
+        socket.on('changementTour', d => { gererTour(d.idActif); });
+        socket.on('recevoirCarte', d => {
+            if(d.idJoueur === socket.id){
+                mesMains[d.indexMain].cartes.push(d.carte);
+                mesMains[d.indexMain].score = d.score;
+                afficherMesMains();
+                if(d.score > 21) { passerMainSuivante(); }
+            }
+        });
+
+        socket.on('finPartie', d => {
+            document.getElementById('score-croupier').innerText = d.scoreCroupier;
+            document.getElementById('status-bar').innerText = "Partie terminée, calcul des gains...";
+        });
+
+        socket.on('retourLobby', () => {
+            document.getElementById('ecran-overlay').style.display = 'flex';
+            document.getElementById('zone-input-mise').style.display = 'block';
+            document.getElementById('msg-attente-lobby').style.display = 'none';
+            document.getElementById('main-croupier').innerHTML = "";
+            document.getElementById('mes-mains-container').innerHTML = "";
+            document.getElementById('status-bar').innerText = "En attente...";
+        });
+
+        function gererTour(id){
+            cEstMonTour = (id === socket.id);
+            ['btn-hit','btn-stand'].forEach(b => document.getElementById(b).disabled = !cEstMonTour);
+            document.getElementById('status-bar').innerText = cEstMonTour ? "🟢 À TOI" : "Attente...";
+        }
+
+        function afficherMesMains(){
+            const c = document.getElementById('mes-mains-container'); c.innerHTML = "";
+            mesMains.forEach((m, i) => {
+                let h = "";
+                m.cartes.forEach(k => { h += `<div class="carte"><div>${k.valeur}</div><div>${k.symbole}</div></div>`; });
+                c.appendChild(Object.assign(document.createElement('div'), { className: `zone-main ${i===indexMainLocale?'main-active':''}`, innerHTML: h + `<div>Score: ${m.score}</div>` }));
+            });
+        }
+
+        function afficherCroupier(cs, app){
+            const z = document.getElementById('main-croupier'); if(!app) z.innerHTML = "";
+            cs.forEach(k => { z.innerHTML += `<div class="carte"><div>${k.valeur}</div><div>${k.symbole}</div></div>`; });
+        }
+
+        function tirer(){ socket.emit('demanderCarte', indexMainLocale); }
+        function arreter(){ socket.emit('stand', indexMainLocale); passerMainSuivante(); }
+        function passerMainSuivante(){ 
+            if(indexMainLocale < mesMains.length - 1){ indexMainLocale++; gererTour(socket.id); } 
+            else { cEstMonTour = false; socket.emit('joueurFini'); }
         }
 
         function toggleChat(){ const b=document.getElementById('chat-box'); b.style.display=b.style.display==='flex'?'none':'flex'; }
         function sendChat(e){ if(e.key==='Enter'){ let i=document.getElementById('chat-input'); if(i.value.trim()) socket.emit('chatMessage', i.value); i.value=''; } }
         socket.on('chatNotification', m => { const l=document.getElementById('chat-log'); l.innerHTML+=`<div>${m}</div>`; l.scrollTop=l.scrollHeight; });
-        socket.on('forceUpdateSolde', m => { solde+=parseInt(m); mettreAJourAffichage(); alert(`💰 Reçu ${m}$ !`); animSolde(m, true); bip(1000,0.5); });
-
-        socket.on('miseAJourTable', d => {
-            const l=document.getElementById('liste-joueurs-lobby'); l.innerHTML="<b>Joueurs:</b>"; let s=false;
-            Object.values(d.joueurs).forEach(j=>{ l.innerHTML+=`<div>${j.pseudo} ${j.pret?'(Prêt)':(j.spectateur?'(Spec)':'(...)')}</div>`; if(j.id===socket.id && j.spectateur) s=true; });
-            if(s && d.etatBlackjack!=='LOBBY'){ document.getElementById('zone-input-mise').style.display='none'; document.getElementById('msg-spectateur').style.display='block'; document.getElementById('ecran-overlay').style.display='none'; document.getElementById('status-bar').innerText="MODE SPECTATEUR"; }
-            const c=document.getElementById('adversaires-container'); c.innerHTML="";
-            Object.values(d.joueurs).forEach(j=>{ if(j.id!==socket.id && !j.spectateur && j.pret){ let h=""; if(j.mains[0]) j.mains[0].cartes.forEach(k=>h+=`<div class="carte-small" style="color:${['♥️','♦️'].includes(k.symbole)?'red':'black'}">${k.valeur}${k.symbole}</div>`); c.innerHTML+=`<div class="adversaire ${d.idActif===j.id?'joueur-actif':''}"><div class="adv-pseudo">${j.pseudo}</div><div>${h}</div></div>`; } });
-        });
-
-        socket.on('debutPartie', d => { document.getElementById('ecran-overlay').style.display='none'; document.getElementById('mes-mains-container').innerHTML=""; let moi=d.joueurs[socket.id]; if(moi&&!moi.spectateur){ mesMains=moi.mains; indexMainLocale=0; afficherMesMains(); } afficherCroupier(d.mainCroupier,false); gererTour(d.idActif); });
-        socket.on('changementTour', d => { gererTour(d.idActif); });
-        socket.on('recevoirCarte', d => { bip(800,0.1); if(d.idJoueur===socket.id){ mesMains[d.indexMain].cartes.push(d.carte); mesMains[d.indexMain].score = d.score; afficherMesMains(); checkSplit(); if(d.score>21) { mesMains[d.indexMain].etat = 'bust'; afficherMesMains(); setTimeout(passerMainSuivante, 1000); } } });
-        socket.on('splitEffectue', nM => { solde -= miseEnCours; mettreAJourAffichage(); animSolde(miseEnCours, false); mesMains = nM; indexMainLocale = 0; afficherMesMains(); });
-        socket.on('croupierTire', d => { afficherCroupier([d.carte], true); document.getElementById('score-croupier').innerText=d.scoreTotal; bip(800,0.1); });
-        
-        socket.on('finPartie', d => {
-            let sc=d.scoreCroupier; let st=document.getElementById('status-bar'); let tot=0;
-            mesMains.forEach(m => { let g=0; if(m.score<=21){ if(sc>21 || m.score>sc) g=m.mise*2; else if(m.score===sc) g=m.mise; } tot+=g; });
-            if(tot>0){ st.innerText = `GAGNÉ TOTAL: +${tot}$`; st.style.color="gold"; animSolde(tot, true); solde += tot; mettreAJourAffichage(); bip(600,0.1); } else { st.innerText = "PERDU..."; st.style.color="red"; }
-        });
-
-        socket.on('retourLobby', () => {
-            document.getElementById('ecran-overlay').style.display='flex'; document.getElementById('zone-input-mise').style.display='block'; document.getElementById('msg-attente-lobby').style.display='none'; document.getElementById('msg-spectateur').style.display='none'; document.getElementById('main-croupier').innerHTML=""; document.getElementById('mes-mains-container').innerHTML=""; document.getElementById('status-bar').innerText="En attente..."; document.getElementById('score-croupier').innerText="0"; verifierFaillite();
-        });
-
-        function gererTour(id){ cEstMonTour=(id===socket.id); ['btn-hit','btn-stand','btn-split'].forEach(b=>document.getElementById(b).disabled=!cEstMonTour); if(cEstMonTour){ document.getElementById('status-bar').innerText="🟢 À TOI (Main "+(indexMainLocale+1)+")"; checkSplit(); } else { document.getElementById('status-bar').innerText=id?"Tour adverse...":"Tour du Croupier..."; } }
-        function afficherMesMains(){ const c=document.getElementById('mes-mains-container'); c.innerHTML=""; mesMains.forEach((m,i)=>{ let h=""; m.cartes.forEach(k=>{h+=`<div class="carte" style="color:${['♥️','♦️'].includes(k.symbole)?'red':'black'}"><div>${k.valeur}</div><div>${k.symbole}</div></div>`;}); let ac=(i===indexMainLocale&&cEstMonTour)?'main-active':''; let op=(i<indexMainLocale||m.etat=='bust'||m.etat=='stand')?'opacity:0.6;':''; c.innerHTML+=`<div class="zone-main ${ac}" style="${op}"><div>${h}</div><div style="font-weight:bold;font-size:20px;margin-top:10px">${m.score}</div><div style="color:${m.etat=='bust'?'red':(m.etat=='stand'?'orange':'white')}">${m.etat.toUpperCase()}</div></div>`; }); }
-        function afficherCroupier(cs, app){ const z=document.getElementById('main-croupier'); if(!app)z.innerHTML=""; cs.forEach(k=>{z.innerHTML+=`<div class="carte" style="color:${['♥️','♦️'].includes(k.symbole)?'red':'black'}"><div>${k.valeur}</div><div>${k.symbole}</div></div>`;}); }
-        function tirer(){ if(cEstMonTour) socket.emit('demanderCarte', indexMainLocale); }
-        function arreter(){ if(cEstMonTour) { mesMains[indexMainLocale].etat='stand'; socket.emit('stand', indexMainLocale); afficherMesMains(); passerMainSuivante(); } }
-        function passerMainSuivante(){ if(indexMainLocale < mesMains.length - 1){ indexMainLocale++; mesMains[indexMainLocale].etat='jeu'; afficherMesMains(); gererTour(socket.id); } else { document.getElementById('status-bar').innerText="Terminé. Attente..."; cEstMonTour=false; socket.emit('joueurFini'); } }
-        function spliter(){ socket.emit('actionSplit'); document.getElementById('btn-split').style.display='none'; }
-        function checkSplit(){ if(mesMains.length===1 && mesMains[0].cartes.length===2 && cEstMonTour){ let c1=mesMains[0].cartes[0].valeur; let c2=mesMains[0].cartes[1].valeur; if(['J','Q','K'].includes(c1)) c1='10'; if(['J','Q','K'].includes(c2)) c2='10'; document.getElementById('btn-split').style.display=(c1===c2 && solde>=miseEnCours)?'inline-block':'none'; } }
-        function jouerSon(nom) { if(nom==='carte') bip(800,0.1); if(nom==='jetons') bip(1200,0.15); if(nom==='victoire') { setTimeout(()=>bip(500,0.1),0); setTimeout(()=>bip(700,0.1),150); } if(nom==='defaite') bip(150,0.5); if(nom==='ruine') bip(100,1.0); }
     </script>
 </body>
 </html>
