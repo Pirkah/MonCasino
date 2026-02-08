@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Blackjack Pro</title>
+    <style>
+        body { background: #076324; color: white; text-align: center; font-family: 'Arial', sans-serif; }
+        .table-container { max-width: 1000px; margin: 0 auto; }
+        .hud { background: rgba(0,0,0,0.6); padding: 15px; border-radius: 15px; margin: 10px; border: 2px solid gold; display: flex; justify-content: space-around; }
+        .tapis { border: 10px solid #3d2b1f; border-radius: 50px; padding: 20px; background: radial-gradient(#1a8c43, #076324); box-shadow: 0 10px 30px rgba(0,0,0,0.5); min-height: 400px; }
+        .carte { background: white; color: black; width: 70px; height: 100px; border-radius: 8px; display: inline-block; margin: 5px; font-weight: bold; font-size: 20px; border: 1px solid #999; vertical-align: top; padding-top: 10px; }
+        .rouge { color: red; }
+        .btn { padding: 12px 25px; font-size: 16px; cursor: pointer; border: none; border-radius: 8px; font-weight: bold; margin: 5px; }
+        .btn-hit { background: gold; color: black; }
+        .btn-stand { background: #e74c3c; color: white; }
+        #ecran-overlay { background: rgba(0,0,0,0.9); position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+        #status-bar { font-size: 24px; color: gold; margin: 15px; height: 30px; text-shadow: 2px 2px 4px black; }
+    </style>
+</head>
+<body>
+    <div id="ecran-overlay">
+        <h1>Miser pour jouer</h1>
+        <p>Solde : <span id="solde-overlay">...</span>$</p>
+        <input type="number" id="input-mise" value="100" style="padding:10px; font-size:20px; width:100px; text-align:center;"><br><br>
+        <button class="btn" style="background: #2ecc71;" onclick="validerMise()">💰 VALIDER LA MISE</button>
+        <div id="attente-msg" style="display:none; color:gold; margin-top:20px;">Attente des autres joueurs...</div>
+    </div>
+
+    <div class="table-container">
+        <div class="hud">
+            <div>👤 <span id="mon-pseudo">...</span></div>
+            <div>💰 <span id="mon-solde">0</span>$</div>
+        </div>
+        <div class="tapis">
+            <div id="status-bar">Faites vos jeux</div>
+            <div id="zone-croupier">
+                <h3>Croupier : <span id="score-croupier">0</span></h3>
+                <div id="cartes-croupier"></div>
+            </div>
+            <hr style="opacity:0.2; margin:20px;">
+            <div id="zone-joueur">
+                <div id="mes-mains"></div>
+            </div>
+        </div>
+        <div class="zone-actions">
+            <button id="btn-hit" class="btn btn-hit" onclick="socket.emit('demanderCarte')" disabled>HIT</button>
+            <button id="btn-stand" class="btn btn-stand" onclick="socket.emit('stand')" disabled>STAND</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let pseudo = localStorage.getItem('casino_pseudo');
+        if(!pseudo) window.location.href = "/";
+
+        socket.emit('nouveauJoueur', pseudo);
+        document.getElementById('mon-pseudo').innerText = pseudo;
+
+        socket.on('initSolde', s => {
+            document.getElementById('mon-solde').innerText = s;
+            document.getElementById('solde-overlay').innerText = s;
+        });
+
+        function validerMise() {
+            const m = parseInt(document.getElementById('input-mise').value);
+            socket.emit('joueurPret', m);
+            document.getElementById('attente-msg').style.display = "block";
+        }
+
+        socket.on('debutPartie', d => {
+            document.getElementById('ecran-overlay').style.display = "none";
+            document.getElementById('cartes-croupier').innerHTML = "";
+            document.getElementById('score-croupier').innerText = "0";
+            afficherCartes(d.mainCroupier, 'cartes-croupier');
+            const moi = d.joueurs[socket.id];
+            if(moi) afficherMainsJoueur(moi.mains);
+            gererBoutons(d.idActif === socket.id);
+        });
+
+        socket.on('recevoirCarte', d => {
+            if(d.idJoueur === socket.id) {
+                // On rafraîchit tout pour être sûr
+                socket.emit('demanderRefreshBJ'); // Petit hack pour simplifier
+            }
+        });
+
+        socket.on('miseAJourTable', d => {
+            const moi = d.joueurs[socket.id];
+            if(moi && moi.mains.length > 0) {
+                afficherMainsJoueur(moi.mains);
+            }
+            gererBoutons(d.idActif === socket.id);
+        });
+
+        socket.on('croupierTire', d => {
+            const z = document.getElementById('cartes-croupier');
+            z.innerHTML += creerCardHTML(d.carte);
+            document.getElementById('score-croupier').innerText = d.scoreTotal;
+        });
+
+        socket.on('finPartie', d => {
+            document.getElementById('status-bar').innerText = "FIN DE PARTIE - Score Croupier : " + d.scoreCroupier;
+            setTimeout(() => { document.getElementById('ecran-overlay').style.display = "flex"; document.getElementById('attente-msg').style.display = "none";}, 4000);
+        });
+
+        function gererBoutons(actif) {
+            document.getElementById('btn-hit').disabled = !actif;
+            document.getElementById('btn-stand').disabled = !actif;
+            document.getElementById('status-bar').innerText = actif ? "🟢 À VOUS DE JOUER" : "Attente du tour...";
+        }
+
+        function afficherMainsJoueur(mains) {
+            const z = document.getElementById('mes-mains');
+            z.innerHTML = "";
+            mains.forEach(m => {
+                let html = `<div style="margin:10px;">`;
+                m.cartes.forEach(c => html += creerCardHTML(c));
+                html += `<div style="font-weight:bold;">Score: ${m.score} (${m.etat.toUpperCase()})</div></div>`;
+                z.innerHTML += html;
+            });
+        }
+
+        function afficherCartes(cartes, divId) {
+            const z = document.getElementById(divId);
+            cartes.forEach(c => z.innerHTML += creerCardHTML(c));
+        }
+
+        function creerCardHTML(c) {
+            const rouge = ['♥️', '♦️'].includes(c.symbole) ? 'rouge' : '';
+            return `<div class="carte ${rouge}"><div>${c.valeur}</div><div>${c.symbole}</div></div>`;
+        }
+    </script>
+</body>
+</html>
