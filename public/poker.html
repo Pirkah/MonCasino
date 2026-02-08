@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Texas Hold'em</title>
+    <style>
+        body { background: #076324; color: white; text-align: center; font-family: 'Arial', sans-serif; overflow-x: hidden; user-select: none; }
+        .header { display: flex; justify-content: space-between; padding: 15px; background: rgba(0,0,0,0.5); }
+        .solde-box { font-size: 24px; color: gold; font-weight: bold; position: relative; }
+        .poker-table { position: relative; width: 800px; height: 400px; background: radial-gradient(#27ae60, #076324); border: 15px solid #3d2b1f; border-radius: 200px; margin: 50px auto; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+        .community-cards { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 10px; z-index: 5; }
+        .pot-display { position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; font-weight: bold; color: gold; background: rgba(0,0,0,0.6); padding: 5px 15px; border-radius: 20px; border: 1px solid gold; }
+        #start-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 20; display: none; }
+        #btn-start-game { background: gold; color: black; border: 3px solid white; padding: 15px 30px; font-size: 20px; font-weight: bold; cursor: pointer; border-radius: 50px; box-shadow: 0 0 20px gold; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        .seat { position: absolute; width: 100px; height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .seat-0 { bottom: -60px; left: 50%; transform: translateX(-50%); } .seat-1 { bottom: 20px; left: -80px; } .seat-2 { top: 20px; left: -80px; } .seat-3 { top: -60px; left: 50%; transform: translateX(-50%); } .seat-4 { top: 20px; right: -80px; } .seat-5 { bottom: 20px; right: -80px; }
+        .player-avatar { width: 50px; height: 50px; background: #333; border-radius: 50%; border: 2px solid #555; display: flex; justify-content: center; align-items: center; font-weight: bold; position: relative; }
+        .active-turn { border-color: gold; box-shadow: 0 0 15px gold; }
+        .player-cards { display: flex; gap: 2px; margin-top: 5px; }
+        .carte { background: white; color: black; width: 40px; height: 60px; border-radius: 5px; display: flex; flex-direction: column; justify-content: center; align-items: center; font-weight: bold; font-size: 14px; border: 1px solid #999; }
+        .carte-dos { background: #b00; border: 2px solid white; color: transparent; } .rouge { color: red; }
+        .controls { position: fixed; bottom: 20px; width: 100%; display: flex; justify-content: center; gap: 10px; }
+        button { padding: 15px 30px; font-size: 18px; border-radius: 10px; border: none; cursor: pointer; font-weight: bold; }
+        button:disabled { background: #555; color: #888; cursor: not-allowed; }
+        .btn-fold { background: #e74c3c; color: white; } .btn-check { background: #3498db; color: white; } .btn-raise { background: #f1c40f; color: black; } .btn-allin { background: #9b59b6; color: white; border: 2px solid white; }
+        .raise-box { background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; display: none; position: absolute; bottom: 80px; }
+        .float-money { position: absolute; font-weight: bold; font-size: 24px; animation: floatUp 2s ease-out forwards; z-index: 2000; pointer-events: none; text-shadow: 0 0 5px black; width: 100px; text-align: center; top:50%; left:50%; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translate(-50%, -50%); } 100% { opacity: 0; transform: translate(-50%, -150px); } }
+        #chat-wrapper { position: fixed; bottom: 10px; left: 10px; z-index: 1000; text-align: left; }
+        #chat-icon { width: 50px; height: 50px; background: gold; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 0 10px gold; font-size: 24px; color: black; }
+        #chat-box { width: 300px; height: 250px; background: rgba(0,0,0,0.9); border: 2px solid gold; border-radius: 10px; display: none; flex-direction: column; padding: 10px; }
+        #chat-log { flex: 1; overflow-y: auto; color: #ddd; font-size: 12px; margin-bottom: 5px; font-family: monospace; }
+        #chat-input { padding: 5px; border-radius: 5px; border: none; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/" style="color:gold;text-decoration:none;font-weight:bold;">🏠 Accueil</a>
+        <div class="solde-box"><span id="solde">0</span> $<div id="anim-anchor"></div></div>
+    </div>
+
+    <div id="lobby-screen" style="margin-top: 50px;">
+        <h1>Texas Hold'em</h1>
+        <p>Buy-in : 500$</p>
+        <button class="btn-check" onclick="joinGame()">S'ASSEOIR (500$)</button>
+    </div>
+
+    <div class="poker-table" id="game-table" style="display:none;">
+        <div class="pot-display">POT: <span id="pot">0</span>$</div>
+        <div id="start-overlay">
+            <button id="btn-start-game" onclick="startGame()">LANCER LA PARTIE</button>
+            <div style="color:white; margin-top:10px; font-size:14px; background:rgba(0,0,0,0.5); padding:5px;">Attente d'un adversaire...</div>
+        </div>
+        <div class="community-cards" id="community"></div>
+        <div id="seats-container"></div>
+    </div>
+
+    <div class="controls" id="controls" style="display:none;">
+        <button class="btn-fold" onclick="act('fold')">SE COUCHER</button>
+        <button class="btn-check" id="btn-check-call" onclick="act('call')">SUIVRE</button>
+        <button class="btn-raise" onclick="toggleRaise()">RELANCER</button>
+        <button class="btn-allin" onclick="act('allin')">⚠️ ALL IN</button>
+    </div>
+
+    <div class="raise-box" id="raise-box">
+        <input type="number" id="raise-amount" value="100" style="width:80px; padding:5px;">
+        <button class="btn-raise" onclick="act('raise')">OK</button>
+    </div>
+
+    <div id="chat-wrapper"><div id="chat-box"><div id="chat-log"></div><input type="text" id="chat-input" placeholder="Message..." onkeypress="sendChat(event)"></div><div id="chat-icon" onclick="toggleChat()">💬</div></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket=io(); let solde=localStorage.getItem('casino_solde')?parseInt(localStorage.getItem('casino_solde')):1000;
+        let pseudo=localStorage.getItem('casino_pseudo')||"";
+        document.getElementById('solde').innerText=solde;
+        let mesCartes = [];
+
+        if(pseudo) { socket.emit('nouveauJoueur', pseudo); }
+        else { pseudo = prompt("Pseudo ?"); localStorage.setItem('casino_pseudo', pseudo); socket.emit('nouveauJoueur', pseudo); }
+
+        function joinGame() {
+            // REFILL AUTOMATIQUE POKER
+            if(solde < 500) {
+                alert("⚠️ Pas assez de jetons ! La maison vous offre 500$ pour jouer !");
+                solde = 500;
+                upd();
+                animSolde(500, true);
+            }
+            
+            solde -= 500; upd(); animSolde(500, false);
+            socket.emit('pokerJoin', 500);
+            document.getElementById('lobby-screen').style.display='none';
+            document.getElementById('game-table').style.display='block';
+        }
+
+        function startGame() { socket.emit('pokerStart'); }
+
+        socket.on('pokerUpdate', (state) => {
+            document.getElementById('pot').innerText = state.pot;
+            
+            let me = state.players.find(p => p.id === socket.id);
+            if (!me && state.etat === 'ATTENTE') {
+                document.getElementById('game-table').style.display='none';
+                document.getElementById('lobby-screen').style.display='block';
+                document.getElementById('controls').style.display = 'none';
+            }
+
+            if(state.etat === 'ATTENTE') {
+                if(state.players.length >= 2) {
+                    document.getElementById('start-overlay').style.display = 'block';
+                    document.querySelector('#start-overlay div').innerText = "Tout le monde est prêt !";
+                    document.getElementById('btn-start-game').style.display = 'block';
+                } else {
+                    document.getElementById('start-overlay').style.display = 'block';
+                    document.getElementById('btn-start-game').style.display = 'none';
+                    document.querySelector('#start-overlay div').innerText = "Attente d'un adversaire...";
+                }
+            } else {
+                document.getElementById('start-overlay').style.display = 'none';
+            }
+
+            const commDiv = document.getElementById('community'); commDiv.innerHTML = "";
+            state.community.forEach(c => commDiv.appendChild(createCard(c)));
+
+            const seatsDiv = document.getElementById('seats-container'); seatsDiv.innerHTML = "";
+            let myIndex = state.players.findIndex(p => p.id === socket.id);
+            if(myIndex === -1) myIndex = 0;
+
+            state.players.forEach((p, idx) => {
+                let visualPos = (idx - myIndex + state.players.length) % state.players.length;
+                let seat = document.createElement('div');
+                seat.className = `seat seat-${visualPos}`;
+                
+                let avatar = document.createElement('div');
+                avatar.className = `player-avatar ${state.actif === p.id ? 'active-turn' : ''}`;
+                avatar.innerText = p.pseudo.substring(0, 2).toUpperCase();
+                avatar.title = p.pseudo;
+                if(p.folded) avatar.style.opacity = "0.5";
+
+                let info = document.createElement('div');
+                info.style.fontSize = "12px";
+                info.innerHTML = `${p.chips}$ <br> <span style="color:gold">${p.miseTour > 0 ? p.miseTour+'$' : ''}</span>`;
+
+                let cardsDiv = document.createElement('div');
+                cardsDiv.className = 'player-cards';
+                if (p.id === socket.id) mesCartes.forEach(c => cardsDiv.appendChild(createCard(c)));
+                else if (p.hasCards && !p.folded) cardsDiv.innerHTML = `<div class="carte carte-dos"></div><div class="carte carte-dos"></div>`;
+
+                seat.appendChild(avatar); seat.appendChild(info); seat.appendChild(cardsDiv);
+                seatsDiv.appendChild(seat);
+            });
+
+            if (state.actif === socket.id && state.etat !== 'ATTENTE' && state.etat !== 'SHOWDOWN') {
+                document.getElementById('controls').style.display = 'flex';
+                let playerMe = state.players.find(p=>p.id===socket.id);
+                let toCall = state.miseActuelle - (playerMe.miseTour || 0);
+                
+                if (toCall >= playerMe.chips) {
+                    document.getElementById('btn-check-call').innerText = `ALL IN (${playerMe.chips}$)`;
+                    document.getElementById('btn-check-call').classList.add('btn-allin');
+                } else {
+                    document.getElementById('btn-check-call').innerText = toCall > 0 ? `SUIVRE (${toCall}$)` : "CHECK";
+                    document.getElementById('btn-check-call').classList.remove('btn-allin');
+                }
+            } else {
+                document.getElementById('controls').style.display = 'none';
+                document.getElementById('raise-box').style.display = 'none';
+            }
+        });
+
+        socket.on('pokerHand', (hand) => { mesCartes = hand; });
+        socket.on('pokerGain', (montant) => { solde += montant; upd(); alert(`💰 TU GAGNES LE POT : ${montant}$ !`); animSolde(montant, true); });
+        
+        function act(action) {
+            let amount = 0;
+            if(action === 'raise') amount = document.getElementById('raise-amount').value;
+            socket.emit('pokerAction', { type: action, amount: amount });
+            document.getElementById('raise-box').style.display = 'none';
+        }
+        function toggleRaise() { let b = document.getElementById('raise-box'); b.style.display = b.style.display === 'block' ? 'none' : 'block'; }
+        function createCard(c) {
+            let d = document.createElement('div'); d.className = 'carte';
+            if (['♥️', '♦️'].includes(c.symbole)) d.classList.add('rouge');
+            d.innerHTML = `<div>${c.valeur}</div><div>${c.symbole}</div>`;
+            return d;
+        }
+
+        function upd(){localStorage.setItem('casino_solde',solde); document.getElementById('solde').innerText=solde;}
+        function animSolde(m, pos){ const el=document.createElement('div'); el.className='float-money'; el.innerText=(pos?'+':'')+m+'$'; el.style.color=pos?'#2ecc71':'#e74c3c'; document.getElementById('anim-anchor').appendChild(el); setTimeout(()=>el.remove(),2000); }
+        function toggleChat(){ const b=document.getElementById('chat-box'); b.style.display=b.style.display==='flex'?'none':'flex'; }
+        function sendChat(e){ if(e.key==='Enter'){ let i=document.getElementById('chat-input'); if(i.value.trim()) socket.emit('chatMessage', i.value); i.value=''; } }
+        socket.on('chatNotification', m => { const l=document.getElementById('chat-log'); l.innerHTML+=`<div>${m}</div>`; l.scrollTop=l.scrollHeight; });
+        socket.on('forceUpdateSolde', m => { solde+=parseInt(m); upd(); alert(`Reçu ${m}$ !`); animSolde(m, true); });
+    </script>
+</body>
+</html>

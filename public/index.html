@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Le Casino de la Dèche 💸</title>
+    <style>
+        body { 
+            background: #111; color: white; text-align: center; font-family: 'Arial Black', sans-serif; 
+            background-image: linear-gradient(45deg, #000 25%, #1a1a1a 25%, #1a1a1a 50%, #000 50%, #000 75%, #1a1a1a 75%, #1a1a1a 100%);
+            background-size: 40px 40px; overflow: hidden;
+        }
+        h1 { font-size: 60px; color: gold; text-shadow: 0 0 20px #ff0000; margin-top: 30px; }
+        .menu { display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; margin-top: 40px; }
+        .carte-jeu { background: #222; border: 4px solid gold; border-radius: 20px; width: 250px; padding: 20px; cursor: pointer; transition: 0.3s; box-shadow: 0 0 15px rgba(255, 215, 0, 0.3); }
+        .carte-jeu:hover { transform: scale(1.1); background: #333; box-shadow: 0 0 30px gold; z-index: 10; }
+        .emoji { font-size: 80px; display: block; margin: 20px 0; }
+        .btn-play { background: gold; color: black; padding: 10px 20px; text-decoration: none; font-size: 20px; font-weight: bold; border-radius: 5px; display: inline-block; }
+        #solde-global { font-size: 30px; color: #2ecc71; margin: 20px; background: rgba(0,0,0,0.8); display: inline-block; padding: 10px 20px; border-radius: 10px; border: 1px solid #2ecc71; position: relative; }
+        .float-money { position: absolute; font-weight: bold; font-size: 24px; animation: floatUp 1.5s ease-out forwards; z-index: 1000; pointer-events: none; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-50px) scale(1.2); } }
+        #chat-wrapper { position: fixed; bottom: 10px; left: 10px; z-index: 1000; text-align: left; transition: 0.3s; }
+        #chat-icon { width: 50px; height: 50px; background: gold; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 0 10px gold; font-size: 24px; color: black; }
+        #chat-box { width: 300px; height: 250px; background: rgba(0,0,0,0.9); border: 2px solid gold; border-radius: 10px; display: none; flex-direction: column; padding: 10px; }
+        #chat-log { flex: 1; overflow-y: auto; color: #ddd; font-size: 12px; margin-bottom: 5px; font-family: monospace; }
+        #chat-input { padding: 5px; border-radius: 5px; border: none; }
+    </style>
+</head>
+<body>
+    <h1>CASINO DE LA DÈCHE</h1>
+    <div id="ecran-pseudo" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:2000;display:flex;flex-direction:column;justify-content:center;align-items:center;">
+        <h2 style="color:gold;">Ton Identité ?</h2>
+        <input type="text" id="input-pseudo" placeholder="Pseudo" style="padding:10px;font-size:20px;">
+        <br><button onclick="validerPseudo()" style="padding:10px 20px;font-size:20px;background:#2ecc71;border:none;cursor:pointer;">ENTRER</button>
+    </div>
+    <div id="solde-global">💰 Portefeuille : <span id="solde">0</span> $<div id="anim-anchor" style="position:absolute; top:0; left:50%;"></div></div>
+    <div class="menu">
+        <div class="carte-jeu" onclick="window.location.href='/blackjack.html'"><div class="emoji">♠️</div><h2>BLACKJACK</h2><p>Duel multijoueur.</p><span class="btn-play">JOUER ▶</span></div>
+        <div class="carte-jeu" onclick="window.location.href='/roulette.html'" style="border-color: #e74c3c;"><div class="emoji">🎡</div><h2>ROULETTE</h2><p>Table commune.</p><span class="btn-play" style="background: #e74c3c; color: white;">JOUER ▶</span></div>
+        <div class="carte-jeu" onclick="window.location.href='/slots.html'" style="border-color: #9b59b6;"><div class="emoji">🎰</div><h2>SLOTS</h2><p>Le Jackpot Néon.</p><span class="btn-play" style="background: #9b59b6; color: white;">JOUER ▶</span></div>
+        <div class="carte-jeu" onclick="window.location.href='/poker.html'" style="border-color: #27ae60;"><div class="emoji">🃏</div><h2>POKER</h2><p>Texas Hold'em.</p><span class="btn-play" style="background: #27ae60; color: white;">JOUER ▶</span></div>
+    </div>
+    <div id="chat-wrapper"><div id="chat-box"><div id="chat-log"></div><input type="text" id="chat-input" placeholder="Message ou /give..." onkeypress="sendChat(event)"></div><div id="chat-icon" onclick="toggleChat()">💬</div></div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let solde = 0;
+        let pseudo = localStorage.getItem('casino_pseudo') || "";
+
+        if(pseudo) {
+            document.getElementById('input-pseudo').value = pseudo;
+            socket.emit('nouveauJoueur', pseudo);
+            document.getElementById('ecran-pseudo').style.display = 'none';
+        }
+
+        function validerPseudo(){
+            pseudo = document.getElementById('input-pseudo').value.trim();
+            if(!pseudo) return;
+            localStorage.setItem('casino_pseudo', pseudo);
+            socket.emit('nouveauJoueur', pseudo);
+            document.getElementById('ecran-pseudo').style.display = 'none';
+        }
+
+        socket.on('initSolde', s => {
+            let ancien = solde;
+            solde = s;
+            document.getElementById('solde').innerText = solde;
+            if(s > ancien && ancien !== 0) animSolde(s - ancien, true);
+        });
+
+        function animSolde(m, pos){
+            const el=document.createElement('div');
+            el.className='float-money';
+            el.innerText=(pos?'+':'')+m+'$';
+            el.style.color=pos?'#2ecc71':'red';
+            document.getElementById('anim-anchor').appendChild(el);
+            setTimeout(()=>el.remove(),1500);
+        }
+
+        function toggleChat(){ const b=document.getElementById('chat-box'); b.style.display=b.style.display==='flex'?'none':'flex'; }
+        function sendChat(e){ if(e.key==='Enter'){ let i=document.getElementById('chat-input'); if(i.value.trim()) socket.emit('chatMessage', i.value); i.value=''; } }
+        socket.on('chatNotification', m => { const l=document.getElementById('chat-log'); l.innerHTML+=`<div>${m}</div>`; l.scrollTop=l.scrollHeight; });
+    </script>
+</body>
+</html>
